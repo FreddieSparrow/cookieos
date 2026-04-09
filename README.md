@@ -333,6 +333,6 @@ cookieos/
 
 ---
 
-*Built by Adam — 16, networking addict, red panda admirer, Minecraft nerd, Beat Saber enthusiast, and die-hard chocoholic running infrastructure that probably shouldn't exist in a bedroom.*
+*Built by cookiehostUK — 16, networking addict, red panda admirer, Minecraft nerd, Beat Saber enthusiast, and die-hard chocoholic running infrastructure that probably shouldn't exist in a bedroom.*
 
 *Nothing is getting in the way of CookieNet.*
