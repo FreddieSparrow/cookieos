@@ -66,15 +66,17 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
 
-STATE_DIR  = Path("/var/lib/cookieos/threat-detector")
-LOG_FILE   = Path("/var/log/cookieos/threat-detector.log")
-PATCH_DIR  = Path("/etc/cookieos/patches")
+STATE_DIR    = Path("/var/lib/cookieos/threat-detector")
+CACHE_DIR    = STATE_DIR / "cache"
+LOG_FILE     = Path("/var/log/cookieos/threat-detector.log")
+PATCH_DIR    = Path("/etc/cookieos/patches")
 SIGNATURE_DB = STATE_DIR / "threat_signatures.json"
-CVE_CACHE  = STATE_DIR / "cve_cache.json"
-OLLAMA_API = "http://localhost:11434/api/generate"
+CVE_CACHE    = STATE_DIR / "cve_cache.json"
+OLLAMA_API   = "http://localhost:11434/api/generate"
 TAILSCALE_API = "http://localhost:41112/local/status"
 
 STATE_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 PATCH_DIR.mkdir(parents=True, exist_ok=True)
 
 
