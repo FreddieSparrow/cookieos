@@ -2,11 +2,13 @@
 
 **Private. Secure. Yours.**
 
-CookieOS is a privacy-first, security-hardened operating system family built by **Adam** — creator of [CookieNet](https://cookiehost.uk), a self-built distributed infrastructure that probably shouldn't exist in a 16-year-old's bedroom.
+CookieOS is a privacy-first, security-hardened operating system family — part of the **[CookieNet](https://cookiehost.uk)** ecosystem, a distributed infrastructure providing secure cloud storage, self-hosted AI, and private networking.
 
-> *"Most people just use the internet. I like understanding how it actually works."*
+> *"Keep your data under your control."*
 
-CookieOS combines the best of GrapheneOS (hardened security), Linux Mint (usability), and Tails OS (anonymity). It integrates natively with CookieCloud, CookieHost, and CookieGPT — the full CookieNet stack. All AI runs **entirely locally on your device**. No telemetry, no cloud dependency, no data ever leaves your hardware.
+CookieOS combines the best of GrapheneOS (hardened security), Linux Mint (usability), and Tails OS (anonymity). It integrates natively with CookieCloud, CookieHost, and on-device AI — the full CookieNet stack. All AI runs **entirely locally on your device**. No telemetry, no cloud dependency, no data ever leaves your hardware.
+
+**Need help?** Email: **support@techtesting.tech** | **CookieCloud:** https://cookiecloud.techtesting.tech
 
 ---
 
@@ -55,10 +57,17 @@ CookieOS is part of the wider **CookieNet** ecosystem — a bedroom datacenter r
 - **Verified boot** — dm-verity (mobile), UEFI Secure Boot (desktop)
 - **Automatic security updates** — unattended-upgrades for security packages only
 
-### CookieCloud Integration
+### BackupCloud & CookieCloud Integration
+- **Multi-provider backups** — CookieCloud, UGreen NAS (SMB/NFS), S3 (Wasabi, AWS), Backblaze, custom providers
+- **Automatic incremental backups** — Desktop & Mobile both support scheduled backups to multiple providers
 - **Native sync client** — two-way delta sync with your CookieCloud instance
 - **Encrypted transport over Tailscale** — WireGuard VPN between all your devices
 - **Offline-capable** — fully usable without server connection
+
+**Backup Support:**
+- 🖥️ **Desktop (Linux)** — `cookiecloud/sync/backup-manager.py` — backup to any provider
+- 📱 **Android** — `mobile/apps/threat-detector-android/` — automatic daily APK/data backups
+- ⛅ **Providers:** CookieCloud, SMB/NFS shares (UGreen), S3-compatible (Wasabi, DigitalOcean), B2, SFTP
 
 ### AI (fully local — no cloud)
 
@@ -70,10 +79,12 @@ CookieOS is part of the wider **CookieNet** ecosystem — a bedroom datacenter r
 | **Phone AI** | Gemma 3 2B on Android | 4GB+ RAM phone |
 
 All AI features include:
-- Prompt safety filter (CSAM, WMD, prompt injection — absolute hard block)
-- NSFW image/video output filter (CLIP-based, runs locally)
-- Per-user rate limiting
-- Encrypted local audit log
+- **Prompt safety filter** (CSAM, WMD, prompt injection — absolute hard block)
+- **NSFW image/video output filter** (CLIP-based, runs locally)
+- **Per-user rate limiting**
+- **Encrypted local audit log**
+- **AI-powered threat detection** — auto-analyzes binaries/APKs, generates patches
+- **Safety tools are protected** — cannot be deleted before AI execution
 
 ---
 
@@ -269,16 +280,20 @@ cookieos/
 │   └── shell/cookiebar/cookiebar.py    CookieBar GTK4 panel
 ├── mobile/
 │   ├── patches/                        AOSP security + degoogle patches
-│   └── apps/phone-ai-server/           Gemma 2B phone server + Tailscale
+│   ├── apps/phone-ai-server/           Gemma 2B phone server + Tailscale
+│   └── apps/threat-detector-android/   Kotlin APK scanner + SELinux patches
 ├── privacy/
 │   ├── network/tor-router.sh           Transparent Tor routing
 │   ├── network/hosts                   Privacy hosts file
 │   ├── storage/luks-setup.sh           LUKS2 / TPM2 encryption
 │   └── identity/fingerprint-spoof.py  Browser fingerprint protection
 ├── security/
-│   └── hardening/apply-hardening.sh   sysctl, PAM, AppArmor, UFW
+│   ├── hardening/apply-hardening.sh   sysctl, PAM, AppArmor, UFW
+│   ├── ai-defense/threat-detector.py  AI-powered virus detection + auto-patching
+│   └── ai-defense/cookie-shield.py    Real-time threat monitoring
 ├── cookiecloud/
-│   └── client/cookiecloud-client.py   Native CookieCloud sync client
+│   ├── client/cookiecloud-client.py   Native CookieCloud sync client
+│   └── sync/backup-manager.py         Multi-provider backup orchestration
 ├── ai/
 │   ├── safeguards/content-filter.py   Shared safety layer (all AI)
 │   ├── ollama/cookie-ollama.py        CookieChat (Gemma 4 + RAG)

@@ -1,0 +1,127 @@
+# CookieOS Android SELinux Policy
+# Protects threat detection and safety tools from tampering
+
+# Types for threat detection tools
+type cookieos_threat_detector_app, app_type;
+type cookieos_threat_detector_bin, exec_type, file_type;
+type cookieos_safety_data, file_type, data_file_type;
+type cookieos_quarantine_dir, file_type, data_file_type;
+
+# AI Models (read-only)
+type cookieos_ai_model, file_type, data_file_type;
+attribute cookieos_protected_runtime;
+attribute cookieos_safety_tools;
+
+# ━━━━━ CORE RULES: Threat Detector Protection ━━━━━
+
+# Threat detector can read APKs and binaries
+allow cookieos_threat_detector_app apk_data_file:dir r_dir_perms;
+allow cookieos_threat_detector_app apk_data_file:file r_file_perms;
+
+# Threat detector can read system binaries
+allow cookieos_threat_detector_app system_file:dir r_dir_perms;
+allow cookieos_threat_detector_app system_file:file r_file_perms;
+allow cookieos_threat_detector_app system_lib_file:file r_file_perms;
+allow cookieos_threat_detector_app system_lib_file:dir r_dir_perms;
+
+# Threat detector can write to its own data
+allow cookieos_threat_detector_app cookieos_safety_data:dir rw_dir_perms;
+allow cookieos_threat_detector_app cookieos_safety_data:file rw_file_perms;
+
+# Threat detector can write to quarantine directory
+allow cookieos_threat_detector_app cookieos_quarantine_dir:dir rw_dir_perms;
+allow cookieos_threat_detector_app cookieos_quarantine_dir:file rw_file_perms;
+
+# Threat detector can read AI models
+allow cookieos_threat_detector_app cookieos_ai_model:dir r_dir_perms;
+allow cookieos_threat_detector_app cookieos_ai_model:file r_file_perms;
+
+# Allow access to /proc for process analysis (sandboxed)
+allow cookieos_threat_detector_app proc:dir r_dir_perms;
+allow cookieos_threat_detector_app proc:file r_file_perms;
+dontaudit cookieos_threat_detector_app proc_stat:file r_file_perms;
+
+# ━━━━━ STRICT DENIAL: Prevent Tampering ━━━━━
+
+# CRITICAL: Nobody can modify threat detector binaries
+neverallow * cookieos_threat_detector_bin:file { write append unlink rename };
+
+# CRITICAL: Nobody can modify threat detector app
+neverallow * cookieos_threat_detector_app:app_gid chmod;
+neverallow * cookieos_threat_detector_app:app_gid { read write append unlink };
+
+# CRITICAL: Nobody can delete safety data
+neverallow * cookieos_safety_data:file unlink;
+neverallow * cookieos_safety_data:dir remove_name;
+
+# Nobody can remove quarantined files (except threat detector)
+neverallow ~cookieos_threat_detector_app cookieos_quarantine_dir:file unlink;
+
+# ━━━━━ NETWORK RESTRICTIONS ━━━━━
+
+# Threat detector can only connect to localhost Ollama
+allow cookieos_threat_detector_app self:tcp_socket create_socket_perms;
+allow cookieos_threat_detector_app localhost:tcp_socket { bind listen connect };
+
+# Deny external network connections
+neverallow cookieos_threat_detector_app adbd_socket:unix_stream_socket connectto;
+neverallow cookieos_threat_detector_app system_uses_legacy_permission_service:service_manager find;
+
+# ━━━━━ CAPABILITY RESTRICTIONS ━━━━━
+
+# Threat detector needs some capabilities for monitoring
+allow cookieos_threat_detector_app self:capability { dac_read_search };
+allow cookieos_threat_detector_app self:capability { setgid };
+
+# But NOT these dangerous ones
+neverallow cookieos_threat_detector_app self:capability { sys_admin sys_boot sys_module };
+neverallow cookieos_threat_detector_app self:capability { dac_override fowner };
+
+# ━━━━━ UNINSTALL PROTECTION ━━━━━
+
+# Package manager cannot uninstall threat detector
+neverallow system_update_service cookieos_threat_detector_app:app_gid { read write append unlink };
+neverallow installd cookieos_threat_detector_app:app_gid uninstall;
+
+# CRITICAL: Nobody can remove the threat detector APK
+neverallow * cookieos_threat_detector_app:file unlink;
+neverallow * /data/app/*threat_detector*:dir { remove_name write };
+
+# ━━━━━ PATCH ENGINE PROTECTION ━━━━━
+
+type cookieos_selinux_policy, file_type, data_file_type;
+
+# Only threat detector can apply SELinux patches
+allow cookieos_threat_detector_app cookieos_selinux_policy:dir rw_dir_perms;
+allow cookieos_threat_detector_app cookieos_selinux_policy:file rw_file_perms;
+
+# Threat detector can reload SELinux policy (for applying patches)
+allow cookieos_threat_detector_app self:selinux { load_policy load_policy_validate };
+
+# But nobody else can
+neverallow ~cookieos_threat_detector_app self:selinux load_policy;
+
+# ━━━━━ CONTENT FILTER PROTECTION ━━━━━
+
+type cookieos_content_filter, app_type;
+
+# Content filter is immutable
+neverallow * cookieos_content_filter:file write;
+neverallow * cookieos_content_filter:file unlink;
+
+# Can only read input, write logs
+allow cookieos_content_filter self:capability { dac_read_search };
+allow cookieos_content_filter cookieos_safety_data:file w_file_perms;
+
+# No network access
+neverallow cookieos_content_filter self:tcp_socket create;
+neverallow cookieos_content_filter self:udp_socket create;
+
+# ━━━━━ INITIALIZATION ORDERING ━━━━━
+
+# Threat detector must initialize before any user applications
+# (Enforced via sepolicy binary compression and loading order)
+
+# App cannot run until threat detector is loaded
+neverallow { untrusted_app platform_app priv_app } self:process fork;
+

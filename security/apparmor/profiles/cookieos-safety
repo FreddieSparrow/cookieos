@@ -1,0 +1,171 @@
+#include <tunables/global>
+
+# CookieOS AI Safety Protection Profile
+# Prevents deletion of threat detection, content filtering, and security tools
+# before they are executed
+
+profile cookieos-safety /usr/bin/python3 flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  # Allow normal Python execution
+  /usr/bin/python3 mr,
+  /usr/lib/python3** mr,
+  /etc/python** r,
+
+  # ━━━━━ CRITICAL: PROTECT SAFETY TOOLS FROM DELETION ━━━━━
+
+  # These paths can only be READ and EXECUTED, never deleted/modified
+  /usr/local/bin/threat-detector.py mr,
+  /usr/local/bin/content-filter.py mr,
+  /usr/local/bin/cookie-shield.py mr,
+  /security/ai-defense/** mr,
+  /var/lib/cookieos/shield/** mr,
+  /var/lib/cookieos/threat-detector/** mr,
+
+  # Deny ALL deletions of safety tools
+  deny /usr/local/bin/threat-detector.py d,
+  deny /usr/local/bin/content-filter.py d,
+  deny /usr/local/bin/cookie-shield.py d,
+  deny /security/ai-defense/** w,
+  deny /var/lib/cookieos/shield/** w,
+  deny /var/lib/cookieos/threat-detector/** w,
+
+  # ─────────────────────────────────────────────────────────
+
+  # AI safety filter can read all files (for safety purposes)
+  /home/** r,
+  /root/** r,
+  /tmp/** r,
+  /var/tmp/** r,
+
+  # Allow writing only to logs and state directories
+  /var/log/cookieos/** w,
+  /var/cache/cookieos/** w,
+  owner /tmp/** rw,
+
+  # Ollama API access (threat analysis via localhost)
+  network inet stream connect localhost:11434,
+  network inet dgram bind localhost,
+
+  # Allow executing system tools for analysis
+  /usr/bin/file x,
+  /usr/bin/readelf x,
+  /usr/bin/strings x,
+  /usr/bin/strace x,
+  /bin/bash x,
+  /bin/sh x,
+
+  # Deny network access to external services (offline-only)
+  deny network inet stream connect !localhost,
+  deny network inet6 stream connect !localhost,
+
+  # Capability restrictions
+  deny capability dac_override,
+  deny capability dac_read_search,
+  deny capability fowner,
+  deny capability fsetid,
+  deny capability sys_admin,
+  deny capability sys_boot,
+  deny capability sys_rawio,
+  allow capability setgid,
+  allow capability setuid,
+}
+
+# Content Filter Profile (Strict)
+profile cookieos-content-filter /usr/local/bin/content-filter.py flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+
+  /usr/local/bin/content-filter.py mr,
+  /usr/lib/python3** mr,
+
+  # Protect this tool from deletion
+  deny /usr/local/bin/content-filter.py d,
+  deny /usr/local/bin/content-filter.py w,
+
+  # Read-only access to models
+  /opt/cookieos/models/** r,
+  /var/lib/cookieos/models/** r,
+
+  # Can write to logs only
+  /var/log/cookieos/filter.log w,
+  /var/log/cookieos/audit.log w,
+
+  # No network access
+  deny network inet,
+  deny network inet6,
+  deny network unix,
+
+  # No filesystem modifications allowed
+  deny /home/** w,
+  deny /root/** w,
+  deny /tmp/** w,
+  deny /var/tmp/** w,
+}
+
+# Threat Detector Profile (Restricted but can read system)
+profile cookieos-threat-detector /usr/local/bin/threat-detector.py flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/local/bin/threat-detector.py mr,
+  /usr/lib/python3** mr,
+
+  # Protect from deletion
+  deny /usr/local/bin/threat-detector.py d,
+  deny /usr/local/bin/threat-detector.py w,
+
+  # Read system binaries for analysis
+  /bin/** mr,
+  /usr/bin/** mr,
+  /usr/local/bin/** mr,
+  /usr/lib/** mr,
+  /opt/** mr,
+
+  # Read user files for threat scanning
+  /home/** r,
+  owner /home/** r,
+
+  # Write to patch/state directories only
+  /etc/cookieos/patches/** w,
+  /var/lib/cookieos/threat-detector/** w,
+  /var/log/cookieos/threat-detector.log w,
+
+  # Local Ollama access for analysis
+  network inet stream connect localhost:11434,
+
+  # Allow executing analysis tools but not modifying them
+  /usr/bin/readelf x,
+  /usr/bin/strace x,
+  /bin/bash x,
+
+  # Deny modifying binaries
+  deny /bin/** w,
+  deny /usr/bin/** w,
+  deny /usr/lib/** w,
+
+  # Capability: can read processes but not modify
+  allow capability sys_ptrace,
+  deny capability sys_module,
+  deny capability sys_boot,
+  deny capability sys_admin,
+}
+
+# ━━━━━ ENFORCEMENT: Make safety tools immutable ━━━━━
+
+# This rule makes safety tool binaries immutable once loaded
+abstraction safety-immutable {
+  # Prevent modification of core safety tools
+  deny /usr/local/bin/threat-detector.py w,
+  deny /usr/local/bin/content-filter.py w,
+  deny /usr/local/bin/cookie-shield.py w,
+  deny /security/ai-defense/** w,
+
+  # Cannot be removed by any process
+  deny /usr/local/bin/threat-detector.py d,
+  deny /usr/local/bin/content-filter.py d,
+  deny /usr/local/bin/cookie-shield.py d,
+}
