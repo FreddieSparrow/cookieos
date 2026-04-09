@@ -1,0 +1,61 @@
+{
+  "homepage": "https://duckduckgo.com",
+  "homepage_is_newtabpage": false,
+  "browser": {
+    "show_home_button": true,
+    "default_search_provider_enabled": true
+  },
+  "default_search_provider": {
+    "enabled": true,
+    "name": "DuckDuckGo",
+    "keyword": "ddg",
+    "search_url": "https://duckduckgo.com/?q={searchTerms}",
+    "suggest_url": "https://duckduckgo.com/ac/?q={searchTerms}&type=list",
+    "favicon_url": "https://duckduckgo.com/favicon.ico"
+  },
+  "first_run_tabs": ["https://duckduckgo.com"],
+  "sync_promo": { "show_on_first_run_allowed": false },
+  "signin": { "allowed": false },
+  "distribution": {
+    "import_bookmarks": false,
+    "import_history": false,
+    "import_search_engine": false,
+    "import_home_page": false,
+    "do_not_launch_chrome": false,
+    "make_chrome_default": true,
+    "make_chrome_default_for_user": true,
+    "suppress_first_run_bubble": true,
+    "suppress_first_run_default_browser_prompt": true
+  },
+  "privacy_sandbox": {
+    "apis_enabled": false,
+    "first_time_consent_shown": true
+  },
+  "profile": {
+    "password_manager_enabled": false,
+    "default_content_setting_values": {
+      "cookies": 4,
+      "javascript": 1,
+      "notifications": 2,
+      "geolocation": 2,
+      "media_stream": 2,
+      "automatic_downloads": 2
+    }
+  },
+  "net": {
+    "network_prediction_options": 2,
+    "dns_prefetching_enabled": false
+  },
+  "translate": { "enabled": false },
+  "spellcheck": { "use_spelling_service": false },
+  "metrics": { "reporting_enabled": false },
+  "safebrowsing": {
+    "enabled": false,
+    "enhanced": false
+  },
+  "autofill": {
+    "enabled": false,
+    "profile_enabled": false,
+    "credit_card_enabled": false
+  }
+}

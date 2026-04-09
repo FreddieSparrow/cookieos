@@ -1,0 +1,153 @@
+{
+  "name": "CookieOS — Daily AI YouTube Video",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 300],
+      "typeVersion": 1,
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 10 * * *" }]
+        }
+      }
+    },
+    {
+      "id": "topic_selector",
+      "name": "Topic Selector",
+      "type": "n8n-nodes-base.code",
+      "position": [460, 300],
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Rotate through topics or pull from your topic list\nconst topics = [\n  'How CookieNet works — a 16-year-old's bedroom datacenter',\n  'Why self-hosting beats the cloud',\n  'Setting up Ubiquiti networking at home',\n  'How I built a Kubernetes cluster in my bedroom',\n  'What is Nextcloud and why you need it',\n  'Open source AI models you can run locally',\n  'How Tailscale makes private networking easy',\n  'Building a Ceph storage cluster on a budget',\n  'Why GrapheneOS is the most private Android',\n  'How I removed Google from my life',\n];\nconst today = new Date();\nconst idx   = today.getDate() % topics.length;\nreturn [{ json: { topic: topics[idx], date: today.toISOString() } }];"
+      }
+    },
+    {
+      "id": "generate_script",
+      "name": "Generate Script (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [680, 300],
+      "typeVersion": 4,
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gemma4:4b',\n  messages: [\n    {\n      role: 'system',\n      content: 'You are CookieGPT, an AI assistant for CookieNet. Write engaging YouTube scripts about tech, networking, and self-hosting. Be informative, conversational, and enthusiastic. Always family-friendly.'\n    },\n    {\n      role: 'user',\n      content: 'Write a 5-minute YouTube video script about: ' + $json.topic + '. Include [IMAGE: description] markers for visuals. Structure: hook, main content, call to action.'\n    }\n  ],\n  stream: false\n}) }}",
+        "options": { "timeout": 120000 }
+      }
+    },
+    {
+      "id": "extract_script",
+      "name": "Extract Script Text",
+      "type": "n8n-nodes-base.code",
+      "position": [900, 300],
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const response = $input.item.json;\nconst script   = response.message?.content || '';\nconst topic    = $('Topic Selector').item.json.topic;\nreturn [{ json: { topic, script, char_count: script.length } }];"
+      }
+    },
+    {
+      "id": "safety_check",
+      "name": "Safety Check (CookieOS Filter)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1120, 300],
+      "typeVersion": 4,
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8888/check-prompt",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: $json.script.substring(0, 2000), user_id: 'n8n-automation' }) }}"
+      }
+    },
+    {
+      "id": "safety_gate",
+      "name": "Is Content Safe?",
+      "type": "n8n-nodes-base.if",
+      "position": [1340, 300],
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [{
+            "id": "safe_check",
+            "leftValue": "={{ $json.allowed }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }]
+        }
+      }
+    },
+    {
+      "id": "generate_thumbnail",
+      "name": "Generate Thumbnail (Fooocus)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1560, 200],
+      "typeVersion": 4,
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:7866",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({\n  prompt: $('Extract Script Text').item.json.topic + ', YouTube thumbnail, eye-catching, cinematic, 16:9, no text',\n  user_id: 'n8n-automation',\n  style: 'Photograph',\n  params: { width: 1280, height: 720 }\n}) }}"
+      }
+    },
+    {
+      "id": "run_full_pipeline",
+      "name": "Run Full Pipeline",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [1560, 380],
+      "typeVersion": 1,
+      "parameters": {
+        "command": "python3 /opt/cookieos-automation/yt-upload.py --topic \"{{ $('Extract Script Text').item.json.topic }}\" --privacy unlisted"
+      }
+    },
+    {
+      "id": "log_blocked",
+      "name": "Log Blocked Content",
+      "type": "n8n-nodes-base.code",
+      "position": [1340, 480],
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "console.log('[CookieOS] Content blocked by safety filter:', $json);\nreturn [{ json: { status: 'blocked', reason: $json.reason } }];"
+      }
+    },
+    {
+      "id": "notify_complete",
+      "name": "Notify Complete",
+      "type": "n8n-nodes-base.code",
+      "position": [1780, 380],
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Could send notification via CookieCloud / Nextcloud Talk\nconsole.log('[CookieOS] YouTube pipeline complete:', $json);\nreturn $input.all();"
+      }
+    }
+  ],
+  "connections": {
+    "trigger":           { "main": [[{ "node": "topic_selector",    "type": "main", "index": 0 }]] },
+    "topic_selector":    { "main": [[{ "node": "generate_script",   "type": "main", "index": 0 }]] },
+    "generate_script":   { "main": [[{ "node": "extract_script",    "type": "main", "index": 0 }]] },
+    "extract_script":    { "main": [[{ "node": "safety_check",      "type": "main", "index": 0 }]] },
+    "safety_check":      { "main": [[{ "node": "safety_gate",       "type": "main", "index": 0 }]] },
+    "safety_gate": {
+      "main": [
+        [
+          { "node": "generate_thumbnail", "type": "main", "index": 0 },
+          { "node": "run_full_pipeline",  "type": "main", "index": 0 }
+        ],
+        [{ "node": "log_blocked",         "type": "main", "index": 0 }]
+      ]
+    },
+    "run_full_pipeline": { "main": [[{ "node": "notify_complete",   "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": ""
+  },
+  "meta": {
+    "description": "CookieOS AI YouTube Pipeline — daily AI-generated video upload with safety filters",
+    "version": "1.0.0"
+  }
+}

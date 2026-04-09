@@ -1,0 +1,84 @@
+# CookieOS Privacy Hosts File
+# Blocks ads, trackers, telemetry, and surveillance domains
+# Auto-updated by: scripts/update-hosts.sh
+# Sources: StevenBlack/hosts, EasyPrivacy, Hagezi Pro
+
+127.0.0.1   localhost
+127.0.1.1   cookieos
+::1         localhost ip6-localhost ip6-loopback
+fe00::0     ip6-localnet
+ff00::0     ip6-mcastprefix
+ff02::1     ip6-allnodes
+ff02::2     ip6-allrouters
+
+# ── Microsoft Telemetry ──────────────────────────────────────────────────────
+0.0.0.0 telemetry.microsoft.com
+0.0.0.0 vortex.data.microsoft.com
+0.0.0.0 watson.microsoft.com
+0.0.0.0 settings-win.data.microsoft.com
+0.0.0.0 activity.windows.com
+0.0.0.0 browser.pipe.aria.microsoft.com
+0.0.0.0 mobile.pipe.aria.microsoft.com
+
+# ── Google Surveillance ──────────────────────────────────────────────────────
+0.0.0.0 metrics.google.com
+0.0.0.0 ssl.google-analytics.com
+0.0.0.0 www.google-analytics.com
+0.0.0.0 google-analytics.com
+0.0.0.0 adservice.google.com
+0.0.0.0 pagead2.googlesyndication.com
+0.0.0.0 clients1.google.com
+0.0.0.0 clients2.google.com
+0.0.0.0 safebrowsing.googleapis.com
+0.0.0.0 play.googleapis.com
+
+# ── Apple Telemetry ──────────────────────────────────────────────────────────
+0.0.0.0 metrics.apple.com
+0.0.0.0 radarsubmissions.apple.com
+0.0.0.0 feedbackws.apple.com
+0.0.0.0 iadsdk.apple.com
+0.0.0.0 iad.apple.com
+
+# ── Meta / Facebook ──────────────────────────────────────────────────────────
+0.0.0.0 graph.facebook.com
+0.0.0.0 connect.facebook.net
+0.0.0.0 pixel.facebook.com
+0.0.0.0 an.facebook.com
+
+# ── Amazon Tracking ──────────────────────────────────────────────────────────
+0.0.0.0 fls-na.amazon.com
+0.0.0.0 fresh.amazon.com
+0.0.0.0 sellercentral-europe.amazon.com
+
+# ── Common Ad Networks ───────────────────────────────────────────────────────
+0.0.0.0 doubleclick.net
+0.0.0.0 ad.doubleclick.net
+0.0.0.0 securepubads.g.doubleclick.net
+0.0.0.0 googleadservices.com
+0.0.0.0 googlesyndication.com
+0.0.0.0 amazon-adsystem.com
+0.0.0.0 ads.yahoo.com
+0.0.0.0 advertising.com
+0.0.0.0 adsafeprotected.com
+0.0.0.0 adsrvr.org
+0.0.0.0 adnxs.com
+0.0.0.0 criteo.com
+0.0.0.0 taboola.com
+0.0.0.0 outbrain.com
+0.0.0.0 mopub.com
+0.0.0.0 unity3d.com
+0.0.0.0 appsflyer.com
+0.0.0.0 adjust.com
+0.0.0.0 branch.io
+0.0.0.0 mixpanel.com
+0.0.0.0 hotjar.com
+0.0.0.0 segment.io
+0.0.0.0 segment.com
+0.0.0.0 amplitude.com
+0.0.0.0 intercom.io
+0.0.0.0 sentry.io
+
+# ── CookieCloud services are NOT blocked ────────────────────────────────────
+# cookiecloud.cookiehost.uk — allowed
+# cookiehost.uk — allowed
+# netadmin.cookiehost.uk — allowed

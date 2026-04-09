@@ -1,0 +1,58 @@
+# AppArmor profile for Firefox ESR under CookieOS
+# Denies write access outside of user profile, blocks suspicious syscalls
+
+#include <tunables/global>
+
+profile firefox /usr/lib/firefox-esr/firefox-esr {
+  #include <abstractions/base>
+  #include <abstractions/dbus-session>
+  #include <abstractions/nameservice>
+  #include <abstractions/ssl_certs>
+  #include <abstractions/X>
+  #include <abstractions/wayland>
+  #include <abstractions/audio>
+
+  # Firefox binary + libs
+  /usr/lib/firefox-esr/**                   mr,
+  /usr/share/firefox-esr/**                 r,
+  /etc/firefox-esr/**                       r,
+  /usr/share/fonts/**                       r,
+  /usr/share/ca-certificates/**             r,
+
+  # User profile — read/write
+  owner @{HOME}/.mozilla/firefox/**         rwk,
+  owner @{HOME}/.cache/mozilla/**           rw,
+  owner @{HOME}/Downloads/**                rw,
+  owner @{HOME}/CookieCloud/Downloads/**    rw,
+
+  # Explicitly block write access outside expected dirs
+  deny @{HOME}/.ssh/**                      rw,
+  deny @{HOME}/.gnupg/**                    rw,
+  deny /etc/**                              w,
+  deny /usr/**                              w,
+  deny /boot/**                             rw,
+  deny /proc/sysrq-trigger                  rw,
+  deny /proc/*/mem                          rw,
+  deny /dev/mem                             rw,
+  deny /dev/kmem                            rw,
+
+  # Network — allow all (Tor proxy handles routing)
+  network inet  stream,
+  network inet6 stream,
+  network inet  dgram,
+
+  # Capabilities — drop dangerous ones
+  deny capability sys_ptrace,
+  deny capability sys_admin,
+  deny capability net_admin,
+  deny capability sys_rawio,
+
+  # Firejail sandbox (nested sandboxing)
+  /usr/bin/firejail                         Px,
+
+  # Required device access
+  /dev/dri/**                               rw,
+  /dev/shm/**                               rw,
+  /run/user/@{uid}/**                       rw,
+  owner /tmp/firefox-**                     rw,
+}

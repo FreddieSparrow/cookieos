@@ -1,0 +1,95 @@
+[tool.briefcase]
+project_name  = "CookieAI"
+bundle        = "uk.cookiehost"
+version       = "1.0.0"
+url           = "https://cookiehost.uk"
+license       = "GPL-3.0-or-later"
+author        = "CookieNet"
+author_email  = "admin@cookiehost.uk"
+
+[tool.briefcase.app.cookieai]
+formal_name   = "CookieAI"
+description   = "Private local AI — chat, image gen, and video. No cloud required."
+icon          = "resources/cookie-icon"
+sources       = [
+    "main",
+    "../../safeguards",
+    "../../fooocus/cookie_fooocus",
+    "../../ollama/cookie_ollama",
+    "../../ollama/model_selector",
+    "../../fooocus/cookie_video",
+]
+requires = [
+    "toga>=0.4.0",
+    "requests>=2.31.0",
+    "cryptography>=41.0.0",
+    "keyring>=24.0.0",
+    "pillow>=10.0.0",
+    "pdfminer.six>=20221105",
+    "python-docx>=1.0.0",
+]
+
+# ── Linux ──────────────────────────────────────────────────────────────────
+[tool.briefcase.app.cookieai.linux]
+system_requires = [
+    "libgirepository1.0-dev",
+    "libcairo2-dev",
+    "libpango1.0-dev",
+    "libwebkit2gtk-4.1-dev",
+    "gir1.2-webkit2-4.1",
+]
+requires = [
+    "toga-gtk>=0.4.0",
+]
+
+[tool.briefcase.app.cookieai.linux.flatpak]
+flatpak-sdk     = "org.gnome.Sdk"
+flatpak-runtime = "org.gnome.Platform"
+build-number    = 1
+
+# ── macOS ─────────────────────────────────────────────────────────────────
+[tool.briefcase.app.cookieai.macOS]
+requires = [
+    "toga-cocoa>=0.4.0",
+    "std-nslog>=1.0.0",
+]
+entitlements = [
+    # Allow reading user files for RAG
+    "com.apple.security.files.user-selected.read-only",
+    # No network entitlement — all AI is local
+]
+
+# ── Windows ───────────────────────────────────────────────────────────────
+[tool.briefcase.app.cookieai.windows]
+requires = [
+    "toga-winforms>=0.4.0",
+]
+
+[tool.briefcase.app.cookieai.windows.app_installer]
+installer-icon = "resources/cookie-icon"
+
+# ── Android ───────────────────────────────────────────────────────────────
+[tool.briefcase.app.cookieai.android]
+requires = [
+    "toga-android>=0.4.0",
+]
+build_gradle_dependencies = [
+    "com.google.android.material:material:1.11.0",
+]
+# Minimum Android 10 (API 29) — required for on-device AI
+min_sdk_version = 29
+
+# Permissions for file access (RAG)
+permissions = [
+    "READ_EXTERNAL_STORAGE",
+    "WRITE_EXTERNAL_STORAGE",
+    "INTERNET",                      # For Ollama / Tailscale
+    "ACCESS_NETWORK_STATE",
+    "ACCESS_WIFI_STATE",
+]
+
+# NOTE: Ollama is not available on Android via Briefcase.
+# Android builds connect to either:
+#   a) A CookieOS desktop/server running Ollama on the Tailscale network
+#   b) The Phone AI Server (phone_ai_server.py) running in Termux
+# The app auto-discovers servers via Tailscale (or manual IP entry).
