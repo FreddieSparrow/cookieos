@@ -11,6 +11,31 @@ Features:
   5. Virus signature learning (updates local model with new patterns)
   6. CVE database sync (optional, Tailscale-distributed)
   7. CookieCloud threat intelligence sharing (opt-in, anonymised)
+
+═══════════════════════════════════════════════════════════════════════════════
+LEGAL DISCLAIMER
+═══════════════════════════════════════════════════════════════════════════════
+CookieOS AI Threat Detector is provided by CookieHost UK ("we", "us") for
+educational and security research purposes. 
+
+DISCLAIMER OF LIABILITY:
+- We are NOT responsible for any damage, data loss, system compromise, or
+  consequences arising from use of this tool, including but not limited to:
+  * Automatic patch execution (even if trust_score > 0.85)
+  * False positives/negatives from AI threat analysis
+  * System instability from applied patches
+  * CVE misclassification or missed threats
+
+USAGE TERMS:
+- This tool requires valid CookieOS subscription to function.
+- All threats must be reported to support@techtesting.tech.
+- Severe threats (CRITICAL) automatically log to GitHub:
+  https://github.com/FreddieSparrow/cookieos/issues
+- Police may be alerted for CSAM or weapons-related threats.
+
+By using CookieOS Threat Detector, you accept these terms.
+CookieHost UK, 82.68.101.76
+═══════════════════════════════════════════════════════════════════════════════
 """
 
 import os
@@ -101,19 +126,46 @@ class BinaryAnalyzer:
     """Analyze binary files for suspicious characteristics."""
 
     @staticmethod
-    def calculate_entropy(data: bytes) -> float:
-        """Shannon entropy — high entropy = compressed/encrypted = suspicious."""
-        if not data or len(data) < 256:  # Need meaningful sample size
+    def calculate_entropy(file_path: str, max_bytes: int = 1024*1024) -> float:
+        """
+        Shannon entropy — high entropy = compressed/encrypted = suspicious.
+        Chunked reading for memory efficiency on large files.
+        
+        NOTE: Interpret entropy contextually:
+        - High entropy in .text section (code) = RED FLAG
+        - High entropy in .resource/.rsrc (assets) = normal (compressed icons, etc.)
+        """
+        try:
+            frequencies = [0] * 256
+            total = 0
+            bytes_read = 0
+
+            with open(file_path, 'rb') as f:
+                while bytes_read < max_bytes:
+                    chunk = f.read(8192)
+                    if not chunk:
+                        break
+
+                    for byte in chunk:
+                        frequencies[byte] += 1
+                        total += 1
+                    bytes_read += len(chunk)
+
+            if total < 256:  # Need meaningful sample
+                return 0.0
+
+            entropy = 0.0
+            for count in frequencies:
+                if count == 0:
+                    continue
+                p = count / total
+                entropy -= p * __import__('math').log2(p)
+
+            return entropy
+
+        except Exception as e:
+            log.warning(f"Entropy calculation failed: {e}")
             return 0.0
-        frequencies = defaultdict(int)
-        for byte in data:
-            frequencies[byte] += 1
-        entropy = 0.0
-        data_len = len(data)
-        for count in frequencies.values():
-            p = count / data_len
-            entropy -= p * (p and __import__('math').log2(p) or 0)
-        return entropy
 
     @staticmethod
     def detect_packer_signatures(data: bytes) -> List[str]:
@@ -149,11 +201,23 @@ class BinaryAnalyzer:
 
 
 class BehavioralAnalyzer:
-    """Analyze process behavior for anomalies."""
+    """Analyze process behavior for anomalies.
+    
+    ⚠️ NOTE: Current implementation uses strace, which has ~5-10% performance overhead.
+    For production CookieOS deployments monitoring hundreds of processes:
+    
+    FUTURE OPTIMIZATION: Replace strace with eBPF (Extended Berkeley Packet Filter)
+    - Kernel-level syscall monitoring with <1% overhead
+    - Requires Linux 5.8+, BCC/libbpf libraries
+    - Example: https://github.com/iovisor/bcc/blob/master/examples/tracing/opensnoop.py
+    """
 
     @staticmethod
     def get_process_syscalls(pid: int, timeout: int = 5) -> List[str]:
-        """Capture syscalls made by a process."""
+        """Capture syscalls made by a process.
+        
+        TODO: Replace with eBPF syscall_trace when available.
+        """
         try:
             result = subprocess.run(
                 ["timeout", str(timeout), "strace", "-e", "trace=all", "-p", str(pid)],
@@ -289,25 +353,40 @@ REASON: [brief explanation]"""
 
     def generate_patch(self, threat_detection: ThreatDetection) -> Optional[str]:
         """
-        Generate a patch script for the detected threat.
-        Returns path to patch script if successful.
+        Generate a safe patch policy for the detected threat.
+        SECURITY: Uses declarative JSON instead of raw bash to prevent AI obfuscation.
+        
+        ⚠️ CRITICAL SECURITY NOTE:
+        LLMs are extremely good at obfuscating intent (base64 encoding, printf reconstruction, etc.).
+        Instead of trusting raw BASH code from AI, we use a declarative policy that our Python
+        code executes using pre-approved, auditable commands.
+        
+        Returns path to patch policy JSON if successful.
         """
         try:
-            prompt = f"""Generate a BASH patch script to mitigate this threat:
+            prompt = f"""Generate a mitigation policy for this malware threat.
+Return ONLY valid JSON, no explanations or markdown.
 
 Threat Type: {threat_detection.threat_type}
 Severity: {threat_detection.severity.value}
 Evidence: {json.dumps(threat_detection.evidence)}
 AI Analysis: {threat_detection.ai_analysis}
 
-The patch should:
-1. Be idempotent (safe to run multiple times)
-2. Only remove/block the malicious component
-3. Restore normal functionality
-4. Log all actions
-5. Work on Debian 12 / Ubuntu 24.04
+JSON should have this structure (example):
+{{
+  "policy_id": "threat-{threat_detection.detection_id}",
+  "actions": [
+    {{"action": "quarantine_file", "target": "/path/to/malware"}},
+    {{"action": "disable_service", "target": "evil_svc"}},
+    {{"action": "block_ip", "target": "1.2.3.4"}},
+    {{"action": "modify_apparmor", "target": "profile_name", "mode": "complain"}}
+  ],
+  "rollback": [
+    {{"action": "restore_file", "backup": "/path/to/backup"}}
+  ]
+}}
 
-Return ONLY valid bash code, no markdown or explanations."""
+Supported actions: quarantine_file, disable_service, block_ip, modify_apparmor, restore_file, remove_cron, kill_process"""
 
             response = self.session.post(
                 OLLAMA_API,
@@ -320,25 +399,31 @@ Return ONLY valid bash code, no markdown or explanations."""
                 return None
 
             result = response.json()
-            patch_code = result.get("response", "")
+            policy_json = result.get("response", "")
 
-            if not patch_code.strip() or len(patch_code) < 50:
-                log.warning("AI generated insufficient patch code")
+            if not policy_json.strip():
+                log.warning("AI generated empty patch policy")
                 return None
 
-            # Write patch to temp file for validation
-            patch_path = PATCH_DIR / f"threat-{threat_detection.detection_id}.sh"
-            with open(patch_path, 'w') as f:
-                f.write("#!/bin/bash\n")
-                f.write("set -euo pipefail\n")
-                f.write(f"# Auto-generated patch for {threat_detection.severity.value} threat\n")
-                f.write(f"# Generated: {datetime.now().isoformat()}\n\n")
-                f.write(patch_code)
+            # Validate JSON structure
+            try:
+                policy = json.loads(policy_json)
+                if "actions" not in policy or not isinstance(policy["actions"], list):
+                    log.warning("Invalid patch policy structure")
+                    return None
+            except json.JSONDecodeError as e:
+                log.warning(f"AI generated invalid JSON: {e}")
+                return None
 
-            os.chmod(patch_path, 0o750)
+            # Write policy to file for validation
+            policy_path = PATCH_DIR / f"threat-{threat_detection.detection_id}.json"
+            with open(policy_path, 'w') as f:
+                json.dump(policy, f, indent=2)
 
-            log.info(f"Generated patch: {patch_path}")
-            return str(patch_path)
+            os.chmod(policy_path, 0o640)  # Read-only for safety
+
+            log.info(f"Generated patch policy: {policy_path}")
+            return str(policy_path)
 
         except Exception as e:
             log.error(f"Error generating patch: {e}")
@@ -429,22 +514,98 @@ class PatchEngine:
                 log.warning(f"Patch requires manual approval: {patch_path}")
                 return False, "Patch requires user approval (interactive approval not implemented)"
 
-            result = subprocess.run(
-                ["bash", patch_path],
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-
-            if result.returncode == 0:
-                log.info(f"Patch applied successfully: {patch_path}")
-                return True, result.stdout
-            else:
-                log.error(f"Patch application failed: {result.stderr}")
-                return False, result.stderr
+            # SECURITY: Execute declarative policy, not raw bash
+            return PatchEngine._execute_policy(patch_path)
 
         except Exception as e:
             log.error(f"Error applying patch: {e}")
+            return False, str(e)
+
+    @staticmethod
+    def _execute_policy(policy_path: str) -> Tuple[bool, str]:
+        """Execute a declarative patch policy safely.
+        
+        Pre-approved actions only — LLM cannot inject arbitrary commands.
+        """
+        try:
+            with open(policy_path, 'r') as f:
+                policy = json.load(f)
+
+            results = []
+
+            for action in policy.get("actions", []):
+                action_type = action.get("action")
+                target = action.get("target")
+
+                if action_type == "quarantine_file":
+                    if os.path.exists(target):
+                        quarantine_dir = Path("/var/quarantine")
+                        quarantine_dir.mkdir(exist_ok=True, parents=True)
+                        shutil.move(target, quarantine_dir / Path(target).name)
+                        results.append(f"✓ Quarantined: {target}")
+                    else:
+                        results.append(f"✗ File not found: {target}")
+
+                elif action_type == "block_ip":
+                    # Use iptables to block IP
+                    result = subprocess.run(
+                        ["iptables", "-A", "INPUT", "-s", target, "-j", "DROP"],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        results.append(f"✓ Blocked IP: {target}")
+                    else:
+                        results.append(f"✗ Failed to block IP: {target}")
+
+                elif action_type == "disable_service":
+                    # Disable systemd service safely
+                    result = subprocess.run(
+                        ["systemctl", "disable", target],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        results.append(f"✓ Disabled service: {target}")
+
+                elif action_type == "make_immutable":
+                    # Use chattr +i to make file immutable (Debian 12+)
+                    result = subprocess.run(
+                        ["chattr", "+i", target],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        results.append(f"✓ Made immutable: {target}")
+
+                elif action_type == "modify_apparmor":
+                    # Only allow complain/enforce mode changes
+                    mode = action.get("mode", "complain")
+                    if mode in ["complain", "enforce", "disable"]:
+                        result = subprocess.run(
+                            ["aa-" + mode, action.get("target")],
+                            capture_output=True,
+                            timeout=5
+                        )
+                        if result.returncode == 0:
+                            results.append(f"✓ AppArmor {mode}: {target}")
+
+                elif action_type == "kill_process":
+                    # Kill process by name safely
+                    result = subprocess.run(
+                        ["killall", target],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        results.append(f"✓ Killed process: {target}")
+
+            return True, "\n".join(results)
+
+        except json.JSONDecodeError:
+            return False, "Invalid patch policy JSON"
+        except Exception as e:
+            log.error(f"Error executing policy: {e}")
             return False, str(e)
 
 

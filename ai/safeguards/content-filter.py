@@ -9,8 +9,27 @@ Provides:
  - Harmful text classification
  - Rate limiting per user
  - Audit logging (encrypted, stored in CookieCloud)
+ - GitHub alerts for CRITICAL content
 
 All checks run LOCALLY — no data leaves the device.
+
+═══════════════════════════════════════════════════════════════════════════════
+LEGAL DISCLAIMER
+═══════════════════════════════════════════════════════════════════════════════
+CookieOS Content Filter is provided by CookieHost UK ("we", "us").
+
+DISCLAIMER OF LIABILITY:
+- We are NOT responsible for any inappropriate content generated, displayed, or
+  stored on your device, including consequences of filter bypasses.
+- CRITICAL threats (CSAM, weapons) will be reported to:
+  * support@techtesting.tech (internal escalation)
+  * GitHub: https://github.com/FreddieSparrow/cookieos/issues (incident tracking)
+  * Potential law enforcement notification (CSAM only)
+- This filter requires valid CookieOS subscription to function.
+
+By using CookieOS, you accept these terms and consent to threat reporting.
+CookieHost UK, 82.68.101.76
+═══════════════════════════════════════════════════════════════════════════════
 """
 
 import re
@@ -18,6 +37,7 @@ import time
 import json
 import hashlib
 import logging
+import subprocess
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -46,9 +66,85 @@ class FilterResult:
     redacted:  str        = ""   # Cleaned version of input (if warn)
 
 
-# ── Text prompt filter ────────────────────────────────────────────────────────
+# ── GitHub Incident Reporter ──────────────────────────────────────────────────
 
-# Patterns that trigger a BLOCK regardless of context
+def _alert_github(category: str, user_id: str, evidence: str):
+    """
+    Alert GitHub for CRITICAL content (CSAM, weapons).
+    
+    Since we don't call external services from CookieOS,
+    this logs to a file that must be manually imported to GitHub issues.
+    
+    Usage: https://github.com/FreddieSparrow/cookieos/issues
+    """
+    try:
+        alert_dir = Path.home() / ".local" / "share" / "cookieos" / "alerts"
+        alert_dir.mkdir(parents=True, exist_ok=True)
+
+        alert_file = alert_dir / f"critical-{datetime.now().isoformat()}.json"
+        alert_data = {
+            "timestamp": datetime.now().isoformat(),
+            "category": category,
+            "user_id": hashlib.sha256(user_id.encode()).hexdigest()[:16],
+            "evidence_hash": hashlib.sha256(evidence.encode()).hexdigest(),
+            "action": "MANUAL_GITHUB_REPORT_NEEDED",
+            "github_url": "https://github.com/FreddieSparrow/cookieos/issues/new?title=CRITICAL%20Content%20Alert"
+        }
+
+        with open(alert_file, 'w') as f:
+            json.dump(alert_data, f, indent=2)
+
+        log.critical(f"[ALERT] CRITICAL threat ({category}) detected. Manual report needed:")
+        log.critical(f"  - Alert file: {alert_file}")
+        log.critical(f"  - GitHub: {alert_data['github_url']}")
+        log.critical(f"  - Email: support@techtesting.tech")
+
+        return True
+
+    except Exception as e:
+        log.error(f"Error creating GitHub alert: {e}")
+        return False
+
+
+# ── Subscription Verification ─────────────────────────────────────────────────
+
+def _verify_subscription(user_id: str) -> bool:
+    """
+    Verify that user has active CookieOS subscription.
+    Required to use AI features.
+    
+    Returns True if subscribed, False otherwise.
+    """
+    try:
+        # Check CookieCloud subscription status
+        # (In production, connect to accounting system)
+        sub_file = Path.home() / ".config" / "cookiecloud" / "subscription.json"
+
+        if not sub_file.exists():
+            log.warning(f"Subscription file not found for {user_id}")
+            return False
+
+        with open(sub_file, 'r') as f:
+            sub_data = json.load(f)
+
+        if not sub_data.get("active", False):
+            log.warning(f"Subscription inactive for {user_id}")
+            return False
+
+        # Check expiry
+        expires = sub_data.get("expires")
+        if expires and datetime.fromisoformat(expires) < datetime.now():
+            log.warning(f"Subscription expired for {user_id}")
+            return False
+
+        return True
+
+    except Exception as e:
+        log.error(f"Subscription verification failed: {e}")
+        return False
+
+
+
 BLOCK_PATTERNS = [
     # Child safety (absolute block)
     (r"\b(child|minor|underage|loli|shota|teen\b.{0,20}(nude|naked|sex|explicit))\b", "csam", Severity.CRITICAL),
@@ -79,6 +175,21 @@ class PromptFilter:
     """Filters text prompts sent to any AI model."""
 
     def check(self, prompt: str, user_id: str = "anonymous", context: str = "chat") -> FilterResult:
+        """
+        Filter and validate prompt.
+        
+        Requires: Valid CookieOS subscription
+        """
+        # CRITICAL: Verify subscription before allowing any AI
+        if not _verify_subscription(user_id):
+            log.warning(f"AI denied: no valid subscription for {user_id}")
+            return FilterResult(
+                allowed=False,
+                severity=Severity.BLOCK,
+                reason="CookieOS subscription required. Please visit https://cookiecloud.techtesting.tech",
+                category="subscription"
+            )
+
         prompt_lower = prompt.lower()
 
         # Check block patterns
@@ -86,6 +197,11 @@ class PromptFilter:
             if re.search(pattern, prompt_lower, re.IGNORECASE):
                 log.warning("[filter] BLOCKED prompt from %s — category=%s", user_id, category)
                 _audit_log(user_id, "block", category, prompt[:200])
+
+                # CRITICAL: Alert GitHub for severe threats
+                if severity == Severity.CRITICAL:
+                    _alert_github(category, user_id, prompt[:500])
+
                 return FilterResult(
                     allowed=False,
                     severity=severity,
